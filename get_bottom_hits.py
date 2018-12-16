@@ -4,6 +4,7 @@ from Bio import Entrez
 import pandas as pd
 import sys
 import pickle
+import os.path
 
 Entrez.email = 'hdutcher@pdx.edu'
 
@@ -17,8 +18,8 @@ def get_bottom_hits(bn, seed_alignment, restable, iter_ct):
 
     seed_sto = AlignIO.read(open(seed_alignment, 'r'), 'stockholm')
     seed_accs = [a.id.split('/')[0] for a in seed_sto]
-    
-    if int(iter_ct) == 2:
+   
+    if not os.path.exists('./' + bn + '_seed_names.p'): 
         seed_names = [get_species_name(a) for a in seed_accs]
         seed_gs = [b.split(' ')[0] + ' ' + b.split(' ')[1] for b in seed_names]
     else:
@@ -35,7 +36,29 @@ def get_bottom_hits(bn, seed_alignment, restable, iter_ct):
     new_ss = pd.DataFrame()
     new_ss_names = []
     score = 0
-    for i, row in df.sort_values(by=['E-value'], ascending=False).iterrows():
+
+    # First slice the dataframe so that redundant hits aren't included
+    seen_accs = []
+    need_slice = False
+    print('initial shape ', df.shape)
+    for i, row in df.iterrows():
+        if row['target_name'] not in seen_accs:
+            seen_accs.append(row['target_name'])
+        else:
+            if row['target_name'] == seen_accs[-1]:
+                continue
+            else:
+                need_slice = True
+                to_stop = i
+                break
+
+    if need_slice:
+        sub = df[:to_stop]
+        print('new shape ', sub.shape)
+    else:
+        sub = df
+
+    for i, row in sub.sort_values(by=['E-value'], ascending=False).iterrows():
         model_name = row['query_accession']
         if row['gs'] in seed_gs:
             break
@@ -63,5 +86,3 @@ if __name__ == '__main__':
         get_bottom_hits(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
     else:
         print("Usage: get_bottom_hits.py basename seed_alignment cmsearch_results_table iteration_count")
-
-
